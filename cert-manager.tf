@@ -74,6 +74,7 @@ data "helm_template" "cert_manager" {
   chart      = "cert-manager"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io
   version      = "1.16.2"
+  version      = "1.16.1"
   kube_version = var.kubernetes_version
   api_versions = []
   # NB installCRDs is generally not recommended, BUT since this

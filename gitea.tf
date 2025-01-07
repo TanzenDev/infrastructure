@@ -42,7 +42,6 @@ locals {
       }
     },
   ]
-  gitea_manifest = join("---\n", [data.kustomizer_manifest.gitea.manifest], [for d in local.gitea_manifests : yamlencode(d)])
 }
 
 # set the configuration.
@@ -77,7 +76,6 @@ data "helm_template" "gitea" {
     }
     persistence = {
       enabled      = true
-      storageClass = "linstor-lvm-r1"
       claimName    = "gitea"
     }
     gitea = {
@@ -153,4 +151,3 @@ data "kustomizer_manifest" "gitea" {
     EOF
     "resources/resources.yaml" = data.helm_template.gitea.manifest
   }
-}

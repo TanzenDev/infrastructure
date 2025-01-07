@@ -1,5 +1,3 @@
-#!/bin/bash
-set -euo pipefail
 
 # the talos image builder.
 # NB this can be one of:
@@ -24,6 +22,8 @@ talos_drbd_extension_tag="9.2.12-v1.9.1@sha256:54968d9481ed6f7af353ea233d035898e
 
 # see https://github.com/siderolabs/extensions/pkgs/container/spin
 # see https://github.com/siderolabs/extensions/tree/main/container-runtime/spin
+#talos_spin_extension_tag="v0.15.1@sha256:642488eadb94d4ddb30f9e65d8ed6836a4c00d699889e060019492308735af9b"
+#talos_spin_extension_tag="v0.15.1@sha256:a0cee06a768e436d93ac98b2c2e1126a01df11f5c96b87686d38b1049e5bd119"
 talos_spin_extension_tag="v0.17.0@sha256:90dc7ea8260caadbdf17513d87a6a834869ec4021bc9d190d4f5f21911ce8dd7"
 
 # see https://github.com/piraeusdatastore/piraeus-operator/releases
@@ -34,8 +34,6 @@ export CHECKPOINT_DISABLE='1'
 export TF_LOG='DEBUG' # TRACE, DEBUG, INFO, WARN or ERROR.
 export TF_LOG_PATH='terraform.log'
 
-export TALOSCONFIG=$PWD/talosconfig.yml
-export KUBECONFIG=$PWD/kubeconfig.yml
 
 function step {
   echo "### $* ###"
@@ -70,6 +68,9 @@ function build_talos_image__imager {
   # see https://www.talos.dev/v1.9/talos-guides/install/boot-assets/
   # see https://www.talos.dev/v1.9/advanced/metal-network-configuration/
   # see Profile type at https://github.com/siderolabs/talos/blob/v1.9.1/pkg/imager/profile/profile.go#L24-L47
+  # see https://www.talos.dev/v1.8/talos-guides/install/boot-assets/
+  # see https://www.talos.dev/v1.8/advanced/metal-network-configuration/
+  # see Profile type at https://github.com/siderolabs/talos/blob/v1.8.3/pkg/imager/profile/profile.go#L24-L47
   local talos_version_tag="v$talos_version"
   rm -rf tmp/talos
   mkdir -p tmp/talos
@@ -111,6 +112,7 @@ EOF
 
 function build_talos_image__image_factory {
   # see https://www.talos.dev/v1.9/learn-more/image-factory/
+  # see https://www.talos.dev/v1.8/learn-more/image-factory/
   # see https://github.com/siderolabs/image-factory?tab=readme-ov-file#http-frontend-api
   local talos_version_tag="v$talos_version"
   rm -rf tmp/talos
@@ -180,23 +182,13 @@ function init {
   step 'build talos image'
   build_talos_image
   step 'terraform init'
-  terraform init -lockfile=readonly
 }
 
 function plan {
   step 'terraform plan'
-  terraform plan -out=tfplan
 }
 
 function apply {
-  step 'terraform apply'
-  terraform apply tfplan
-  terraform output -raw talosconfig >talosconfig.yml
-  terraform output -raw kubeconfig >kubeconfig.yml
-  health
-  piraeus-install
-  export-kubernetes-ingress-ca-crt
-  info
 }
 
 function health {
@@ -218,11 +210,18 @@ function piraeus-install {
   # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.1/docs/explanation/components.md
   # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.1/docs/reference/linstorsatelliteconfiguration.md
   # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.1/docs/reference/linstorcluster.md
+  # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.0/docs/how-to/talos.md
+  # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.0/docs/tutorial/get-started.md
+  # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.0/docs/tutorial/replicated-volumes.md
+  # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.0/docs/explanation/components.md
+  # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.0/docs/reference/linstorsatelliteconfiguration.md
+  # see https://github.com/piraeusdatastore/piraeus-operator/blob/v2.7.0/docs/reference/linstorcluster.md
   # see https://linbit.com/drbd-user-guide/linstor-guide-1_0-en/
   # see https://linbit.com/drbd-user-guide/linstor-guide-1_0-en/#ch-kubernetes
   # see 5.7.1. Available Parameters in a Storage Class at https://linbit.com/drbd-user-guide/linstor-guide-1_0-en/#s-kubernetes-sc-parameters
   # see https://linbit.com/drbd-user-guide/drbd-guide-9_0-en/
   # see https://www.talos.dev/v1.9/kubernetes-guides/configuration/storage/#piraeus--linstor
+  # see https://www.talos.dev/v1.8/kubernetes-guides/configuration/storage/#piraeus--linstor
   step 'piraeus install'
   kubectl apply --server-side -k "https://github.com/piraeusdatastore/piraeus-operator//config/default?ref=v$piraeus_operator_version"
   step 'piraeus wait'
@@ -273,6 +272,8 @@ kind: StorageClass
 provisioner: linstor.csi.linbit.com
 metadata:
   name: linstor-lvm-r1
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Delete
@@ -284,12 +285,6 @@ EOF
   step 'piraeus configure wait'
   kubectl wait pod --timeout=15m --for=condition=Ready -n piraeus-datastore -l app.kubernetes.io/name=piraeus-datastore
   kubectl wait LinstorCluster/linstor --timeout=15m --for=condition=Available
-  step 'piraeus create-device-pool'
-  local workers="$(terraform output -raw workers)"
-  local nodes=($(echo "$workers" | tr ',' ' '))
-  for ((n=0; n<${#nodes[@]}; ++n)); do
-    local node="w$((n))"
-    local wwn="$(printf "000000000000ab%02x" $n)"
     step "piraeus wait node $node"
     while ! kubectl linstor storage-pool list --node "$node" >/dev/null 2>&1; do sleep 3; done
     step "piraeus create-device-pool $node"
@@ -301,7 +296,6 @@ EOF
         "$node" \
         "/dev/disk/by-id/wwn-0x$wwn"
     fi
-  done
 }
 
 function piraeus-info {
@@ -312,34 +306,10 @@ function piraeus-info {
   step 'piraeus volume list'
   kubectl linstor volume list
 }
-
 function info {
-  local controllers="$(terraform output -raw controllers)"
-  local workers="$(terraform output -raw workers)"
-  local nodes=($(echo "$controllers,$workers" | tr ',' ' '))
-  step 'talos node installer image'
-  for n in "${nodes[@]}"; do
-    # NB there can be multiple machineconfigs in a machine. we only want to see
-    #    the ones with an id that looks like a version tag.
-    talosctl -n $n get machineconfigs -o json \
-      | jq -r 'select(.metadata.id | test("v\\d+")) | .spec' \
-      | yq -r '.machine.install.image' \
-      | sed -E "s,(.+),$n: \1,g"
-  done
-  step 'talos node os-release'
-  for n in "${nodes[@]}"; do
-    talosctl -n $n read /etc/os-release \
-      | sed -E "s,(.+),$n: \1,g"
-  done
-  step 'kubernetes nodes'
-  kubectl get nodes -o wide
-  piraeus-info
 }
 
 function export-kubernetes-ingress-ca-crt {
-  kubectl get -n cert-manager secret/ingress-tls -o jsonpath='{.data.tls\.crt}' \
-    | base64 -d \
-    > kubernetes-ingress-ca-crt.pem
 }
 
 function upgrade {
@@ -353,7 +323,6 @@ function upgrade {
 }
 
 function destroy {
-  terraform destroy -auto-approve
 }
 
 case $1 in

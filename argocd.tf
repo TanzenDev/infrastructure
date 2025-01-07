@@ -7,6 +7,7 @@ locals {
     # NB alternatively we could set the server.certificate.enabled helm value. but
     #    that does not allow us to fully customize the certificate (e.g. subject).
     # see https://github.com/argoproj/argo-helm/blob/argo-cd-7.7.11/charts/argo-cd/templates/argocd-server/certificate.yaml
+    # see https://github.com/argoproj/argo-helm/blob/argo-cd-7.7.3/charts/argo-cd/templates/argocd-server/certificate.yaml
     # see https://argo-cd.readthedocs.io/en/stable/operator-manual/tls/
     # see https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.Certificate
     {
@@ -48,6 +49,7 @@ locals {
 # set the configuration.
 # NB the default values are described at:
 #       https://github.com/argoproj/argo-helm/blob/argo-cd-7.7.11/charts/argo-cd/values.yaml
+#       https://github.com/argoproj/argo-helm/blob/argo-cd-7.7.3/charts/argo-cd/values.yaml
 #    NB make sure you are seeing the same version of the chart that you are installing.
 # NB this disables the tls between argocd components, that is, the internal
 #    cluster traffic does not uses tls, and only the ingress uses tls.
@@ -65,6 +67,7 @@ data "helm_template" "argocd" {
   # see https://artifacthub.io/packages/helm/argo/argo-cd
   # renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
   version      = "7.7.11" # app version 2.13.2.
+  version      = "7.7.11" 
   kube_version = var.kubernetes_version
   api_versions = []
   values = [yamlencode({

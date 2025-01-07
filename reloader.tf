@@ -5,6 +5,7 @@
 #    changes.
 # NB the default values are described at:
 #       https://github.com/stakater/reloader/blob/v1.2.0/deployments/kubernetes/chart/reloader/values.yaml
+#       https://github.com/stakater/reloader/blob/v1.1.0/deployments/kubernetes/chart/reloader/values.yaml
 #    NB make sure you are seeing the same version of the chart that you are installing.
 # see https://github.com/stakater/reloader
 # see https://artifacthub.io/packages/helm/stakater/reloader
@@ -17,6 +18,7 @@ data "helm_template" "reloader" {
   chart      = "reloader"
   # renovate: datasource=helm depName=reloader registryUrl=https://stakater.github.io/stakater-charts
   version      = "1.2.0"
+  version      = "1.1.0"
   kube_version = var.kubernetes_version
   api_versions = []
   set {
